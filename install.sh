@@ -240,6 +240,10 @@ export NVM_DIR="$HOME/.nvm"
 if command -v nvm &>/dev/null; then
   nvm install 24 && nvm alias default 24
   info "Node v24 installed and set as default"
+
+  info "Installing global npm packages..."
+  npm install -g @google/gemini-cli
+  npm install -g puppeteer-core
 else
   warn "nvm not available in this shell — run 'nvm install 24' after restarting your terminal"
 fi
