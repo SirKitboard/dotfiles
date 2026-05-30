@@ -96,6 +96,9 @@ cask "nordvpn"
 cask "tailscale"
 cask "wireguard"        # also available on App Store
 
+# --- Browsers ---
+cask "firefox"
+
 # --- Communication ---
 cask "discord"
 cask "spotify"
