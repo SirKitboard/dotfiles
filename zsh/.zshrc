@@ -6,7 +6,7 @@ fi
 # ── Oh My Zsh ─────────────────────────────────────────────────────────────────
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME="powerlevel10k/powerlevel10k"
-plugins=(git zsh-autosuggestions)
+plugins=(git)
 source $ZSH/oh-my-zsh.sh
 
 # ── PATH ──────────────────────────────────────────────────────────────────────
@@ -22,6 +22,7 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && source "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
 
 # ── Shell enhancements ────────────────────────────────────────────────────────
+source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /opt/homebrew/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 source <(fzf --zsh)
 eval "$(zoxide init zsh)"
@@ -32,7 +33,8 @@ zstyle ':completion:*' format $'\e[2;37mCompleting %d\e[m'
 source <(carapace _carapace)
 
 # ── Atuin (shell history) ─────────────────────────────────────────────────────
-source "$HOME/.atuin/bin/env"
+# Only needed for script-based installs; Homebrew installs skip this file
+[[ -f "$HOME/.atuin/bin/env" ]] && source "$HOME/.atuin/bin/env"
 eval "$(atuin init zsh)"
 
 # ── Cloudflare CLI completions ────────────────────────────────────────────────
