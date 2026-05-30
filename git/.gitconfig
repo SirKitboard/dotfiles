@@ -1,16 +1,21 @@
 [user]
-	name = YOUR_NAME
+	name  = YOUR_NAME
 	email = YOUR_EMAIL
-[filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
-[merge]
-	ff = false
-[pull]
-	ff = only
-[core]
-	pager = cat
+
 [init]
 	defaultBranch = main
+
+[core]
+	pager = cat
+
+[merge]
+	ff = false
+
+[pull]
+	ff = only
+
+[filter "lfs"]
+	clean    = git-lfs clean -- %f
+	smudge   = git-lfs smudge -- %f
+	process  = git-lfs filter-process
+	required = true

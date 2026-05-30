@@ -1,8 +1,10 @@
-# Example homelab host — replace with your actual hostname/IP
-# Host myserver.local
-#   HostName myserver.local
-#   User root
-
+# ── GitHub ────────────────────────────────────────────────────────────────────
 Host github.com
   AddKeysToAgent yes
-  IdentityFile ~/.ssh/id_rsa
+  IdentityFile   ~/.ssh/id_rsa
+
+# ── Homelab ───────────────────────────────────────────────────────────────────
+# Add your own hosts below, or let install.sh prompt you for them.
+# Host myserver.local
+#   HostName myserver.local
+#   User     root
