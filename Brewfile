@@ -98,6 +98,7 @@ cask "wireguard"        # also available on App Store
 
 # --- Browsers ---
 cask "firefox"
+cask "google-chrome"
 
 # --- Communication ---
 cask "discord"
