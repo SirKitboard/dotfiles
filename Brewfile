@@ -1,4 +1,5 @@
 tap "homebrew/bundle"
+brew "mas"                  # Mac App Store CLI
 
 # --- Shell & Terminal ---
 brew "zsh-autosuggestions"
@@ -114,3 +115,14 @@ cask "wireshark"
 
 # --- Fonts (for Powerlevel10k / Nerd Fonts) ---
 cask "font-meslo-lg-nerd-font"
+
+# ============================================================
+# Mac App Store (requires: mas, and being signed into App Store)
+# ============================================================
+mas "iMovie",      id: 408981434
+mas "Keynote",     id: 409183694
+mas "Pages",       id: 409201541
+mas "Numbers",     id: 409203825
+mas "GarageBand",  id: 682658836
+mas "Xcode",       id: 497799835
+mas "Developer",   id: 640199958

@@ -83,6 +83,8 @@ fi
 
 # ── 3. Homebrew Packages ──────────────────────────────────────────────────────
 section "Homebrew Packages (Brewfile)"
+warn "Make sure you are signed into the Mac App Store before continuing (required for mas/Xcode/iMovie etc.)"
+read -r -p "  Press Enter when ready (or Ctrl+C to skip and run manually later)..."
 brew bundle --file="$DOTFILES_DIR/Brewfile" || warn "Some packages may have failed — review output above"
 
 # ── 4. Oh My Zsh ─────────────────────────────────────────────────────────────
