@@ -70,6 +70,7 @@ cask "iterm2"
 # --- Editors / IDEs ---
 cask "visual-studio-code"
 cask "cursor"
+cask "claude-code"          # Claude Code CLI
 
 # --- Dev Tools ---
 cask "docker"

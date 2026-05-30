@@ -133,6 +133,9 @@ chmod 600 "$HOME/.ssh/config"
 # Neovim
 backup_and_link "$DOTFILES_DIR/nvim" "$HOME/.config/nvim"
 
+# Claude Code
+backup_and_link "$DOTFILES_DIR/claude/settings.json" "$HOME/.claude/settings.json"
+
 # ── Apply personal config values ──────────────────────────────────────────────
 
 # Git identity
