@@ -22,7 +22,43 @@ backup_and_link() {
   info "Linked $dst → $src"
 }
 
-# ── 1. Xcode Command Line Tools ───────────────────────────────────────────────
+prompt() {
+  local var="$1" label="$2" default="${3:-}"
+  local prompt_str
+  if [[ -n "$default" ]]; then
+    prompt_str="  $label [$default]: "
+  else
+    prompt_str="  $label: "
+  fi
+  read -r -p "$prompt_str" value
+  if [[ -z "$value" && -n "$default" ]]; then
+    value="$default"
+  fi
+  printf -v "$var" '%s' "$value"
+}
+
+# ── 1. Personal Configuration ─────────────────────────────────────────────────
+section "Personal Configuration"
+echo "  This info is written into your local config files only — not committed."
+echo ""
+
+prompt GIT_NAME  "Full name (for git commits)"
+prompt GIT_EMAIL "Email (for git commits)"
+
+echo ""
+echo "  SSH hosts (leave blank to skip):"
+prompt SSH_HOST_1_ALIAS "  Host alias (e.g. homeserver)"
+if [[ -n "$SSH_HOST_1_ALIAS" ]]; then
+  prompt SSH_HOST_1_HOSTNAME "  HostName/IP for $SSH_HOST_1_ALIAS"
+  prompt SSH_HOST_1_USER     "  User for $SSH_HOST_1_ALIAS" "root"
+fi
+prompt SSH_HOST_2_ALIAS "  Second host alias (leave blank to skip)"
+if [[ -n "$SSH_HOST_2_ALIAS" ]]; then
+  prompt SSH_HOST_2_HOSTNAME "  HostName/IP for $SSH_HOST_2_ALIAS"
+  prompt SSH_HOST_2_USER     "  User for $SSH_HOST_2_ALIAS" "root"
+fi
+
+# ── 2. Xcode Command Line Tools ───────────────────────────────────────────────
 section "Xcode Command Line Tools"
 if ! xcode-select -p &>/dev/null; then
   info "Installing Xcode Command Line Tools..."
@@ -96,6 +132,48 @@ chmod 600 "$HOME/.ssh/config"
 
 # Neovim
 backup_and_link "$DOTFILES_DIR/nvim" "$HOME/.config/nvim"
+
+# ── Apply personal config values ──────────────────────────────────────────────
+
+# Git identity
+if [[ -n "$GIT_NAME" ]]; then
+  git config --global user.name "$GIT_NAME"
+  info "Git user.name set to '$GIT_NAME'"
+fi
+if [[ -n "$GIT_EMAIL" ]]; then
+  git config --global user.email "$GIT_EMAIL"
+  info "Git user.email set to '$GIT_EMAIL'"
+fi
+
+# SSH hosts — append to ssh/config (the symlink target)
+SSH_CONFIG="$HOME/.ssh/config"
+if [[ -n "$SSH_HOST_1_ALIAS" && -n "$SSH_HOST_1_HOSTNAME" ]]; then
+  # Remove any previous entry with the same alias to stay idempotent
+  if grep -q "^Host $SSH_HOST_1_ALIAS$" "$SSH_CONFIG" 2>/dev/null; then
+    warn "SSH host '$SSH_HOST_1_ALIAS' already in config — skipping"
+  else
+    {
+      echo ""
+      echo "Host $SSH_HOST_1_ALIAS"
+      echo "  HostName $SSH_HOST_1_HOSTNAME"
+      echo "  User $SSH_HOST_1_USER"
+    } >> "$SSH_CONFIG"
+    info "SSH host '$SSH_HOST_1_ALIAS' added"
+  fi
+fi
+if [[ -n "$SSH_HOST_2_ALIAS" && -n "$SSH_HOST_2_HOSTNAME" ]]; then
+  if grep -q "^Host $SSH_HOST_2_ALIAS$" "$SSH_CONFIG" 2>/dev/null; then
+    warn "SSH host '$SSH_HOST_2_ALIAS' already in config — skipping"
+  else
+    {
+      echo ""
+      echo "Host $SSH_HOST_2_ALIAS"
+      echo "  HostName $SSH_HOST_2_HOSTNAME"
+      echo "  User $SSH_HOST_2_USER"
+    } >> "$SSH_CONFIG"
+    info "SSH host '$SSH_HOST_2_ALIAS' added"
+  fi
+fi
 
 # ── 8. VSCode Settings ────────────────────────────────────────────────────────
 section "VSCode Settings"
