@@ -1,39 +1,51 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -uo pipefail   # no -e: we track failures ourselves and always finish
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
-info()    { echo -e "${GREEN}[dotfiles]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[dotfiles]${NC} $*"; }
-error()   { echo -e "${RED}[dotfiles]${NC} $*" >&2; }
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; NC='\033[0m'
+info()    { echo -e "${GREEN}  ✓${NC} $*"; }
+warn()    { echo -e "${YELLOW}  !${NC} $*"; }
+error()   { echo -e "${RED}  ✗${NC} $*"; }
+skip()    { echo -e "${BLUE}  ↩${NC} $*"; }
 section() { echo -e "\n${GREEN}══ $* ══${NC}"; }
+
+# ── Failure tracking ──────────────────────────────────────────────────────────
+FAILURES=()
+fail() { FAILURES+=("$1"); error "$1"; }
+
+# Runs a command, tracks pass/fail under a label.
+track() {
+  local label="$1"; shift
+  if "$@" 2>&1; then
+    info "$label"
+  else
+    fail "$label"
+  fi
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 backup_and_link() {
-  local src="$1" dst="$2"
+  local src="$1" dst="$2" label="${3:-$(basename "$dst")}"
   if [[ -e "$dst" && ! -L "$dst" ]]; then
-    warn "Backing up existing $dst → $dst.bak"
+    warn "Backing up $dst → $dst.bak"
     mv "$dst" "$dst.bak"
   fi
   mkdir -p "$(dirname "$dst")"
-  ln -sf "$src" "$dst"
-  info "Linked $dst → $src"
+  if ln -sf "$src" "$dst"; then
+    info "Linked $label"
+  else
+    fail "Symlink $label"
+  fi
 }
 
 prompt() {
   local var="$1" label="$2" default="${3:-}"
   local prompt_str
-  if [[ -n "$default" ]]; then
-    prompt_str="  $label [$default]: "
-  else
-    prompt_str="  $label: "
-  fi
+  [[ -n "$default" ]] && prompt_str="  $label [$default]: " || prompt_str="  $label: "
   read -r -p "$prompt_str" value
-  if [[ -z "$value" && -n "$default" ]]; then
-    value="$default"
-  fi
+  [[ -z "$value" && -n "$default" ]] && value="$default"
   printf -v "$var" '%s' "$value"
 }
 
@@ -60,312 +72,261 @@ fi
 
 # ── 2. Xcode Command Line Tools ───────────────────────────────────────────────
 section "Xcode Command Line Tools"
-if ! xcode-select -p &>/dev/null; then
+if xcode-select -p &>/dev/null; then
+  skip "Xcode CLT already installed"
+else
   info "Installing Xcode Command Line Tools..."
-  xcode-select --install
-  # Wait for the user to finish the GUI installation before continuing
-  until xcode-select -p &>/dev/null; do sleep 5; done
-else
-  info "Xcode CLT already installed"
+  if xcode-select --install 2>&1; then
+    until xcode-select -p &>/dev/null; do sleep 5; done
+    info "Xcode CLT installed"
+  else
+    fail "Xcode CLT install"
+  fi
 fi
 
-# ── 2. Homebrew ───────────────────────────────────────────────────────────────
+# ── 3. Homebrew ───────────────────────────────────────────────────────────────
 section "Homebrew"
-if ! command -v brew &>/dev/null; then
-  info "Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-  # Add brew to PATH for Apple Silicon
-  eval "$(/opt/homebrew/bin/brew shellenv)"
+if command -v brew &>/dev/null; then
+  skip "Homebrew already installed — updating..."
+  track "Homebrew update" brew update
 else
-  info "Homebrew already installed — updating..."
-  brew update
+  track "Homebrew install" \
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  eval "$(/opt/homebrew/bin/brew shellenv)"
 fi
 
-# ── 3. Homebrew Packages ──────────────────────────────────────────────────────
+# ── 4. Homebrew Packages ──────────────────────────────────────────────────────
 section "Homebrew Packages (Brewfile)"
 warn "Make sure you are signed into the Mac App Store before continuing (required for mas/Xcode/iMovie etc.)"
-read -r -p "  Press Enter when ready (or Ctrl+C to skip and run manually later)..."
-brew bundle --file="$DOTFILES_DIR/Brewfile" || warn "Some packages may have failed — review output above"
+read -r -p "  Press Enter when ready (or Ctrl+C to skip)..."
 
-# ── 4. Oh My Zsh ─────────────────────────────────────────────────────────────
-section "Oh My Zsh"
-if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-  info "Installing Oh My Zsh..."
-  RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-else
-  info "Oh My Zsh already installed"
+# brew bundle continues past individual failures; we capture the exit code
+# and also parse output to surface which specific packages failed
+BUNDLE_OUTPUT=$(brew bundle --file="$DOTFILES_DIR/Brewfile" --verbose 2>&1)
+BUNDLE_EXIT=$?
+echo "$BUNDLE_OUTPUT"
+if [[ $BUNDLE_EXIT -ne 0 ]]; then
+  # Extract failed package names from brew bundle output
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^(Installing|Cask).*failed ]] || [[ "$line" =~ Error ]]; then
+      fail "brew: $line"
+    fi
+  done <<< "$BUNDLE_OUTPUT"
+  # Fallback if parsing found nothing
+  [[ ${#FAILURES[@]} -eq 0 ]] && fail "brew bundle (check output above)"
 fi
 
-# ── 5. Powerlevel10k ──────────────────────────────────────────────────────────
+# ── 5. Oh My Zsh ─────────────────────────────────────────────────────────────
+section "Oh My Zsh"
+if [[ -d "$HOME/.oh-my-zsh" ]]; then
+  skip "Oh My Zsh already installed"
+else
+  track "Oh My Zsh install" \
+    bash -c "RUNZSH=no CHSH=no sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\""
+fi
+
+# ── 6. Powerlevel10k ──────────────────────────────────────────────────────────
 section "Powerlevel10k"
 P10K_DIR="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k"
-if [[ ! -d "$P10K_DIR" ]]; then
-  info "Installing Powerlevel10k..."
-  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_DIR"
+if [[ -d "$P10K_DIR" ]]; then
+  skip "Powerlevel10k already installed — pulling latest..."
+  track "Powerlevel10k update" git -C "$P10K_DIR" pull --ff-only
 else
-  info "Powerlevel10k already installed"
+  track "Powerlevel10k install" \
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git "$P10K_DIR"
 fi
 
-# ── 6. Atuin ─────────────────────────────────────────────────────────────────
+# ── 7. Atuin ─────────────────────────────────────────────────────────────────
 section "Atuin"
-if ! command -v atuin &>/dev/null && [[ ! -f "$HOME/.atuin/bin/atuin" ]]; then
-  info "Installing Atuin..."
-  bash <(curl --proto '=https' --tlsv1.2 -sSf https://setup.atuin.sh)
+if command -v atuin &>/dev/null || [[ -f "$HOME/.atuin/bin/atuin" ]]; then
+  skip "Atuin already installed"
 else
-  info "Atuin already installed"
+  track "Atuin install" \
+    bash -c "bash <(curl --proto '=https' --tlsv1.2 -sSf https://setup.atuin.sh)"
 fi
 
-# ── 7. Dotfile Symlinks ───────────────────────────────────────────────────────
+# ── 8. Dotfile Symlinks ───────────────────────────────────────────────────────
 section "Dotfile Symlinks"
 
-# ZSH
-backup_and_link "$DOTFILES_DIR/zsh/.zshrc"   "$HOME/.zshrc"
-backup_and_link "$DOTFILES_DIR/zsh/.zprofile" "$HOME/.zprofile"
-backup_and_link "$DOTFILES_DIR/zsh/.p10k.zsh" "$HOME/.p10k.zsh"
+backup_and_link "$DOTFILES_DIR/zsh/.zshrc"             "$HOME/.zshrc"            ".zshrc"
+backup_and_link "$DOTFILES_DIR/zsh/.zprofile"          "$HOME/.zprofile"         ".zprofile"
+backup_and_link "$DOTFILES_DIR/zsh/.p10k.zsh"          "$HOME/.p10k.zsh"         ".p10k.zsh"
+backup_and_link "$DOTFILES_DIR/git/.gitconfig"         "$HOME/.gitconfig"        ".gitconfig"
+backup_and_link "$DOTFILES_DIR/nvim"                   "$HOME/.config/nvim"      "nvim config"
+backup_and_link "$DOTFILES_DIR/claude/settings.json"   "$HOME/.claude/settings.json" "claude settings"
 
-# Git
-backup_and_link "$DOTFILES_DIR/git/.gitconfig" "$HOME/.gitconfig"
-
-# SSH config (not keys — generate/copy those manually)
-mkdir -p "$HOME/.ssh"
-chmod 700 "$HOME/.ssh"
-backup_and_link "$DOTFILES_DIR/ssh/config" "$HOME/.ssh/config"
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+backup_and_link "$DOTFILES_DIR/ssh/config" "$HOME/.ssh/config" "ssh config"
 chmod 600 "$HOME/.ssh/config"
 
-# Neovim
-backup_and_link "$DOTFILES_DIR/nvim" "$HOME/.config/nvim"
-
-# Claude Code
-backup_and_link "$DOTFILES_DIR/claude/settings.json" "$HOME/.claude/settings.json"
-
 # ── Apply personal config values ──────────────────────────────────────────────
+if [[ -n "$GIT_NAME" ]];  then track "git user.name"  git config --global user.name  "$GIT_NAME";  fi
+if [[ -n "$GIT_EMAIL" ]]; then track "git user.email" git config --global user.email "$GIT_EMAIL"; fi
 
-# Git identity
-if [[ -n "$GIT_NAME" ]]; then
-  git config --global user.name "$GIT_NAME"
-  info "Git user.name set to '$GIT_NAME'"
-fi
-if [[ -n "$GIT_EMAIL" ]]; then
-  git config --global user.email "$GIT_EMAIL"
-  info "Git user.email set to '$GIT_EMAIL'"
-fi
-
-# SSH hosts — append to ssh/config (the symlink target)
 SSH_CONFIG="$HOME/.ssh/config"
-if [[ -n "$SSH_HOST_1_ALIAS" && -n "$SSH_HOST_1_HOSTNAME" ]]; then
-  # Remove any previous entry with the same alias to stay idempotent
-  if grep -q "^Host $SSH_HOST_1_ALIAS$" "$SSH_CONFIG" 2>/dev/null; then
-    warn "SSH host '$SSH_HOST_1_ALIAS' already in config — skipping"
-  else
-    {
-      echo ""
-      echo "Host $SSH_HOST_1_ALIAS"
-      echo "  HostName $SSH_HOST_1_HOSTNAME"
-      echo "  User $SSH_HOST_1_USER"
-    } >> "$SSH_CONFIG"
-    info "SSH host '$SSH_HOST_1_ALIAS' added"
+for i in 1 2; do
+  local_alias="SSH_HOST_${i}_ALIAS"; local_host="SSH_HOST_${i}_HOSTNAME"; local_user="SSH_HOST_${i}_USER"
+  alias_val="${!local_alias:-}"; host_val="${!local_host:-}"; user_val="${!local_user:-}"
+  if [[ -n "$alias_val" && -n "$host_val" ]]; then
+    if grep -q "^Host $alias_val$" "$SSH_CONFIG" 2>/dev/null; then
+      skip "SSH host '$alias_val' already in config"
+    else
+      printf '\nHost %s\n  HostName %s\n  User %s\n' "$alias_val" "$host_val" "$user_val" >> "$SSH_CONFIG"
+      info "SSH host '$alias_val' added"
+    fi
   fi
-fi
-if [[ -n "$SSH_HOST_2_ALIAS" && -n "$SSH_HOST_2_HOSTNAME" ]]; then
-  if grep -q "^Host $SSH_HOST_2_ALIAS$" "$SSH_CONFIG" 2>/dev/null; then
-    warn "SSH host '$SSH_HOST_2_ALIAS' already in config — skipping"
-  else
-    {
-      echo ""
-      echo "Host $SSH_HOST_2_ALIAS"
-      echo "  HostName $SSH_HOST_2_HOSTNAME"
-      echo "  User $SSH_HOST_2_USER"
-    } >> "$SSH_CONFIG"
-    info "SSH host '$SSH_HOST_2_ALIAS' added"
-  fi
-fi
+done
 
-# ── 8. VSCode Settings ────────────────────────────────────────────────────────
-section "VSCode Settings"
+# ── 9. VSCode ────────────────────────────────────────────────────────────────
+section "VSCode Settings & Extensions"
 VSCODE_USER="$HOME/Library/Application Support/Code/User"
 if command -v code &>/dev/null || [[ -d "/Applications/Visual Studio Code.app" ]]; then
   mkdir -p "$VSCODE_USER"
-  backup_and_link "$DOTFILES_DIR/vscode/settings.json"    "$VSCODE_USER/settings.json"
-  backup_and_link "$DOTFILES_DIR/vscode/keybindings.json" "$VSCODE_USER/keybindings.json"
+  backup_and_link "$DOTFILES_DIR/vscode/settings.json"    "$VSCODE_USER/settings.json"    "vscode settings"
+  backup_and_link "$DOTFILES_DIR/vscode/keybindings.json" "$VSCODE_USER/keybindings.json" "vscode keybindings"
 
-  section "VSCode Extensions"
   while IFS= read -r ext; do
-    code --install-extension "$ext" --force 2>/dev/null || warn "Could not install extension: $ext"
+    [[ -z "$ext" ]] && continue
+    if code --list-extensions 2>/dev/null | grep -qi "^${ext}$"; then
+      skip "VSCode ext: $ext (already installed)"
+    else
+      track "VSCode ext: $ext" code --install-extension "$ext" --force
+    fi
   done < "$DOTFILES_DIR/vscode/extensions.txt"
 else
-  warn "VSCode not found — skipping settings and extensions"
+  warn "VSCode not found — skipping"
 fi
 
-# ── 9. macOS System Preferences ───────────────────────────────────────────────
+# ── 10. macOS Defaults ───────────────────────────────────────────────────────
 section "macOS Defaults"
+track "Keyboard: faster key repeat"   defaults write NSGlobalDomain KeyRepeat -int 2
+track "Keyboard: initial key repeat"  defaults write NSGlobalDomain InitialKeyRepeat -int 15
+track "Finder: show extensions"       defaults write NSGlobalDomain AppleShowAllExtensions -bool true
+track "Finder: show hidden files"     defaults write com.apple.finder AppleShowAllFiles -bool true
+track "Finder: show path bar"         defaults write com.apple.finder ShowPathbar -bool true
+track "Dock: auto-hide"               defaults write com.apple.dock autohide -bool true
+track "Dock: scale minimize"          defaults write com.apple.dock mineffect -string "scale"
+track "Screenshots: save to Desktop"  defaults write com.apple.screencapture location -string "$HOME/Desktop"
+track "Trackpad: tap to click"        defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
+track "Rectangle: launch on login"    defaults write com.knollsoft.Rectangle launchOnLogin -bool true
+track "Rectangle: allow any shortcut" defaults write com.knollsoft.Rectangle allowAnyShortcut -bool true
+for app in "Finder" "Dock" "SystemUIServer"; do killall "$app" &>/dev/null || true; done
 
-# Keyboard: faster key repeat
-defaults write NSGlobalDomain KeyRepeat -int 2
-defaults write NSGlobalDomain InitialKeyRepeat -int 15
-
-# Finder: show all file extensions
-defaults write NSGlobalDomain AppleShowAllExtensions -bool true
-
-# Finder: show hidden files
-defaults write com.apple.finder AppleShowAllFiles -bool true
-
-# Finder: show path bar
-defaults write com.apple.finder ShowPathbar -bool true
-
-# Dock: auto-hide
-defaults write com.apple.dock autohide -bool true
-
-# Dock: minimize effect = scale (faster)
-defaults write com.apple.dock mineffect -string "scale"
-
-# Screenshots: save to ~/Desktop
-defaults write com.apple.screencapture location -string "$HOME/Desktop"
-
-# Trackpad: tap to click
-defaults write com.apple.driver.AppleBluetoothMultitouch.trackpad Clicking -bool true
-
-# Rectangle: launch on login (already set in prefs, just ensuring)
-defaults write com.knollsoft.Rectangle launchOnLogin -bool true
-defaults write com.knollsoft.Rectangle allowAnyShortcut -bool true
-
-# Kill affected apps
-for app in "Finder" "Dock" "SystemUIServer"; do
-  killall "$app" &>/dev/null || true
-done
-
-info "macOS defaults applied"
-
-# ── 10. Node / Python Versions ────────────────────────────────────────────────
+# ── 11. Node & Python ────────────────────────────────────────────────────────
 section "Node (nvm)"
 export NVM_DIR="$HOME/.nvm"
 [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && source "/opt/homebrew/opt/nvm/nvm.sh"
 if command -v nvm &>/dev/null; then
-  nvm install 24 && nvm alias default 24
-  info "Node v24 installed and set as default"
+  if nvm ls 24 &>/dev/null | grep -q "v24"; then
+    skip "Node 24 already installed"
+  else
+    track "Node 24 install" nvm install 24
+  fi
+  track "Node 24 set default" nvm alias default 24
 
-  info "Installing global npm packages..."
-  npm install -g @google/gemini-cli
-  npm install -g puppeteer-core
+  for pkg in "@google/gemini-cli" "puppeteer-core"; do
+    if npm list -g --depth=0 2>/dev/null | grep -q "${pkg##*/}"; then
+      skip "npm: $pkg (already installed) — updating..."
+      track "npm update: $pkg" npm install -g "$pkg"
+    else
+      track "npm install: $pkg" npm install -g "$pkg"
+    fi
+  done
 else
-  warn "nvm not available in this shell — run 'nvm install 24' after restarting your terminal"
+  fail "nvm not available — run 'nvm install 24' after restarting terminal"
 fi
 
 section "Python (pyenv)"
 if command -v pyenv &>/dev/null; then
-  pyenv install 3.13.3 --skip-existing
-  pyenv global 3.13.3
-  info "Python 3.13.3 set as global"
+  track "Python 3.13.3 install" pyenv install 3.13.3 --skip-existing
+  track "Python 3.13.3 set global" pyenv global 3.13.3
 else
-  warn "pyenv not available — run 'pyenv install 3.13.3 && pyenv global 3.13.3' after restarting"
+  fail "pyenv not available — run 'pyenv install 3.13.3 && pyenv global 3.13.3' after restarting"
 fi
 
-# ── 11. Syncthing (saves + secrets) ──────────────────────────────────────────
+# ── 12. Syncthing ────────────────────────────────────────────────────────────
 section "Syncthing"
-
 mkdir -p "$HOME/Sync/secrets"
-info "Created ~/Sync structure"
+info "~/Sync structure ready"
 
-# Set up game save symlinks — script lives in ~/Sync (private, synced)
 if [[ -f "$HOME/Sync/link-saves.sh" ]]; then
-  bash "$HOME/Sync/link-saves.sh"
+  track "Game save symlinks" bash "$HOME/Sync/link-saves.sh"
 else
   warn "~/Sync/link-saves.sh not found — run it manually after Syncthing connects"
 fi
 
-info "Syncthing installed — launch it from Applications to finish setup"
-warn "In the Syncthing UI: add your other device and share the ~/Sync folder"
-warn "Enable Staggered file versioning on the ~/Sync folder for save history"
+info "Launch Syncthing from Applications to finish device pairing"
 
-# ── 12. Optional Apps ────────────────────────────────────────────────────────
+# ── 13. Optional Apps ────────────────────────────────────────────────────────
 section "Optional Apps"
-
 prompt_install_cask() {
   local cask="$1" label="$2"
   read -r -p "  Install $label? [y/N] " reply
   if [[ "$reply" =~ ^[Yy]$ ]]; then
-    brew install --cask "$cask" && info "$label installed" || warn "Failed to install $label"
+    track "Optional: $label" brew install --cask "$cask"
   else
-    info "Skipping $label"
+    skip "$label"
   fi
 }
-
 prompt_install_cask "ollama"             "Ollama (local LLM runner)"
 prompt_install_cask "epic-games"         "Epic Games Launcher"
 prompt_install_cask "altserver"          "AltServer (iOS sideloading)"
 prompt_install_cask "fontforge"          "FontForge (font editor)"
 prompt_install_cask "unraid-usb-creator" "Unraid USB Creator"
 
-# ── 12. CLI Auth ─────────────────────────────────────────────────────────────
-section "CLI Auth & Post-install Setup"
+# ── 14. CLI Auth ──────────────────────────────────────────────────────────────
+section "CLI Auth"
 
-# GitHub CLI
 if command -v gh &>/dev/null; then
-  if ! gh auth status &>/dev/null; then
-    info "Logging into GitHub CLI..."
-    gh auth login
+  if gh auth status &>/dev/null; then
+    skip "GitHub CLI already authenticated"
   else
-    info "GitHub CLI already authenticated"
+    track "GitHub CLI login" gh auth login
   fi
 fi
 
-# Cloudflare CLI
 if command -v cf &>/dev/null; then
-  if ! cf whoami &>/dev/null 2>&1; then
-    info "Logging into Cloudflare CLI..."
-    cf login
-    # Generate zsh completions after login
-    mkdir -p "$HOME/.config/cf/completions"
-    cf completion zsh > "$HOME/.config/cf/completions/_cf.zsh"
-    info "Cloudflare CLI completions written to ~/.config/cf/completions/_cf.zsh"
+  if cf whoami &>/dev/null 2>&1; then
+    skip "Cloudflare CLI already authenticated"
   else
-    info "Cloudflare CLI already authenticated"
+    if track "Cloudflare CLI login" cf login; then
+      mkdir -p "$HOME/.config/cf/completions"
+      track "Cloudflare CLI completions" \
+        bash -c "cf completion zsh > \"$HOME/.config/cf/completions/_cf.zsh\""
+    fi
   fi
 fi
 
-# Atuin
-if command -v atuin &>/dev/null || [[ -f "$HOME/.atuin/bin/atuin" ]]; then
-  if ! atuin account info &>/dev/null 2>&1; then
-    info "Logging into Atuin (shell history sync)..."
-    "$HOME/.atuin/bin/atuin" login 2>/dev/null || atuin login
+ATUIN_BIN="$HOME/.atuin/bin/atuin"
+ATUIN_CMD=$(command -v atuin 2>/dev/null || echo "$ATUIN_BIN")
+if [[ -x "$ATUIN_CMD" ]]; then
+  if "$ATUIN_CMD" account info &>/dev/null 2>&1; then
+    skip "Atuin already authenticated"
   else
-    info "Atuin already authenticated"
+    track "Atuin login" "$ATUIN_CMD" login
   fi
 fi
 
-# ── Done ──────────────────────────────────────────────────────────────────────
-section "All done!"
+# ── Summary ───────────────────────────────────────────────────────────────────
+section "Summary"
 echo ""
-info "Automated setup complete. A few things need manual attention:"
+if [[ ${#FAILURES[@]} -eq 0 ]]; then
+  info "All steps completed successfully."
+else
+  error "${#FAILURES[@]} step(s) failed:"
+  for f in "${FAILURES[@]}"; do
+    echo -e "    ${RED}✗${NC} $f"
+  done
+  echo ""
+  warn "Re-run install.sh to retry, or fix the above manually."
+fi
+
 echo ""
-echo "  ── SSH ──────────────────────────────────────────────────────────"
-echo "  Copy your SSH keys to ~/.ssh/ then run:"
-echo "    chmod 600 ~/.ssh/id_*"
-echo "    ssh-add ~/.ssh/id_rsa"
-echo ""
-echo "  ── Terminal ─────────────────────────────────────────────────────"
-echo "  Restart your terminal, then:"
-echo "    source ~/.zshrc"
-echo "    p10k configure    # only if you want to redo the prompt wizard"
-echo ""
-echo "  In iTerm2: Preferences → Profiles → Text → Font → set 'MesloLGS NF'"
-echo "  (Export your profile: Profiles → Other Actions → Export JSON → save to iterm2/profile.json)"
-echo ""
-echo "  ── Apps to sign into ────────────────────────────────────────────"
-echo "  • Docker Desktop  — open app and sign in to Docker Hub"
-echo "  • NordVPN         — open app and log in"
-echo "  • Tailscale       — open app and authenticate"
-echo "  • Google Drive    — open app and sign in"
-echo "  • GitHub Desktop  — open app → File → Options → Accounts"
-echo "  • GitKraken       — open app and sign in"
-echo "  • Spotify         — open app and sign in"
-echo "  • Discord         — open app and sign in"
-echo "  • Logi Options+   — open app and pair your devices"
-echo ""
-echo "  ── App Store (install manually) ─────────────────────────────────"
-echo "  • Xcode (full IDE)"
-echo "  • WireGuard (if the brew cask didn't install correctly)"
-echo ""
-echo "  ── Neovim ───────────────────────────────────────────────────────"
-echo "  First launch will auto-install plugins via lazy.nvim:"
-echo "    nvim"
+info "Manual steps remaining:"
+echo "  • Copy SSH keys → ~/.ssh/  then: chmod 600 ~/.ssh/id_* && ssh-add ~/.ssh/id_rsa"
+echo "  • iTerm2: Preferences → Profiles → Text → Font → MesloLGS NF"
+echo "  • Sign in: Docker, NordVPN, Tailscale, Google Drive, GitHub Desktop,"
+echo "             GitKraken, Spotify, Discord, Logi Options+"
+echo "  • Syncthing: open app → add remote device → share ~/Sync folder"
+echo "  • Neovim: run 'nvim' once to trigger lazy.nvim plugin install"
 echo ""
