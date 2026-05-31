@@ -323,7 +323,9 @@ fi
 
 echo ""
 info "Manual steps remaining:"
-echo "  • Copy SSH keys → ~/.ssh/  then: chmod 600 ~/.ssh/id_* && ssh-add ~/.ssh/id_rsa"
+echo "  • Generate SSH key: ssh-keygen -t ed25519 -C "your@email.com"
+  •   Then add to GitHub: gh auth login (handles this) or paste ~/.ssh/id_ed25519.pub
+  •   And add to any servers: ssh-copy-id user@host"
 echo "  • iTerm2: Preferences → Profiles → Text → Font → MesloLGS NF"
 echo "  • Sign in: Docker, NordVPN, Tailscale, Google Drive, GitHub Desktop,"
 echo "             GitKraken, Spotify, Discord, Logi Options+"
