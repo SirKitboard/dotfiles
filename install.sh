@@ -262,37 +262,19 @@ fi
 # ── 11. Syncthing (saves + secrets) ──────────────────────────────────────────
 section "Syncthing"
 
-SYNC_DIR="$HOME/Sync"
-SECRETS_DIR="$SYNC_DIR/secrets"
-SAVES_DIR="$SYNC_DIR/saves"
+mkdir -p "$HOME/Sync/secrets"
+info "Created ~/Sync structure"
 
-# Create the Sync directory structure
-mkdir -p "$SECRETS_DIR"
-mkdir -p "$SAVES_DIR/pokemon-infinite-fusion"
-info "Created $SYNC_DIR structure"
-
-# Pokemon Infinite Fusion — saves live in Wine's AppData
-FUSION_SAVE_SRC="$HOME/.wine/drive_c/users/$USER/AppData/Roaming/infinitefusion"
-FUSION_SAVE_DST="$SAVES_DIR/pokemon-infinite-fusion"
-
-if [[ -d "$FUSION_SAVE_SRC" && ! -L "$FUSION_SAVE_SRC" ]]; then
-  info "Migrating Infinite Fusion saves to $FUSION_SAVE_DST..."
-  cp -r "$FUSION_SAVE_SRC/." "$FUSION_SAVE_DST/"
-  rm -rf "$FUSION_SAVE_SRC"
-  ln -sf "$FUSION_SAVE_DST" "$FUSION_SAVE_SRC"
-  info "Infinite Fusion saves migrated and symlinked"
-elif [[ ! -e "$FUSION_SAVE_SRC" ]]; then
-  # Fresh install — Wine hasn't created the dir yet, pre-create the symlink
-  mkdir -p "$(dirname "$FUSION_SAVE_SRC")"
-  ln -sf "$FUSION_SAVE_DST" "$FUSION_SAVE_SRC"
-  info "Infinite Fusion save symlink created (game not yet run)"
+# Set up game save symlinks — script lives in ~/Sync (private, synced)
+if [[ -f "$HOME/Sync/link-saves.sh" ]]; then
+  bash "$HOME/Sync/link-saves.sh"
 else
-  info "Infinite Fusion save symlink already in place"
+  warn "~/Sync/link-saves.sh not found — run it manually after Syncthing connects"
 fi
 
 info "Syncthing installed — launch it from Applications to finish setup"
-warn "In the Syncthing UI: add your other device and share the '$SYNC_DIR' folder"
-warn "Make sure to set the folder path to $SYNC_DIR on both machines"
+warn "In the Syncthing UI: add your other device and share the ~/Sync folder"
+warn "Enable Staggered file versioning on the ~/Sync folder for save history"
 
 # ── 12. Optional Apps ────────────────────────────────────────────────────────
 section "Optional Apps"

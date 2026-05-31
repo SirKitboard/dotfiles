@@ -8,37 +8,44 @@ files sync P2P directly between machines.
 ```
 ~/Sync/
 ├── secrets/        # .env files, API keys, tokens
-└── saves/
-    └── pokemon-infinite-fusion/   # symlinked from Wine AppData
+├── saves/          # game save directories
+└── link-saves.sh   # private script — creates symlinks from game dirs into saves/
 ```
 
-## Symlink map
+`link-saves.sh` lives in `~/Sync/` (not in this repo) so game names and paths
+stay private. It syncs automatically to any device you add to Syncthing.
 
-| Syncthing path | Symlinked from | Notes |
-|----------------|---------------|-------|
-| `~/Sync/saves/pokemon-infinite-fusion/` | `~/.wine/drive_c/users/$USER/AppData/Roaming/infinitefusion/` | Set up automatically by install.sh |
+## Setting up symlinks
+
+Once Syncthing has connected and `~/Sync` has synced:
+
+```bash
+bash ~/Sync/link-saves.sh
+```
+
+`install.sh` calls this automatically if the file exists, otherwise prints a
+reminder to run it after Syncthing connects.
 
 ## Secrets
 
-Drop `.env` files into `~/Sync/secrets/`. Then symlink them into projects:
+Drop `.env` files into `~/Sync/secrets/`. Then symlink into projects:
 
 ```bash
 ln -sf ~/Sync/secrets/.env.myproject ~/Projects/myproject/.env
 ```
 
-## Setup on a new machine
+## File versioning
 
-`install.sh` handles the symlinks automatically. After running it:
+Enable **Staggered versioning** on the `~/Sync` folder in the Syncthing UI:
+- Folder → Edit → File Versioning → Staggered
+- Keeps hourly snapshots for 1 day, daily for 1 month, weekly beyond that
+- Old versions stored in `~/Sync/.stversions/`
 
-1. Open Syncthing at **http://localhost:8384**
-2. On the existing machine, go to **Add Remote Device** and paste the new machine's Device ID
-3. Accept the connection request on the new machine
-4. Share the `~/Sync` folder with the new device
+## Syncthing setup on a new device
 
-Both machines need to be reachable — either on the same network or connected via Tailscale.
-
-## Syncthing tips
-
-- **Conflict files**: if the same file is edited on both machines while offline, Syncthing creates a `.sync-conflict` file — keep the one you want and delete the other
-- **Ignore patterns**: add a `.stignore` file inside `~/Sync/` to exclude files (e.g. `*.tmp`)
-- **Status**: run `brew services info syncthing` to check the daemon is running
+1. Install: `brew install --cask syncthing-app`
+2. Open the app — web UI at **http://localhost:8384**
+3. Add remote device using the existing machine's Device ID (Actions → Show ID)
+4. Accept the connection on the existing machine
+5. Share the `~/Sync` folder, set path to `~/Sync`
+6. Once synced, run `bash ~/Sync/link-saves.sh`
