@@ -111,7 +111,6 @@ cask "gimp"
 cask "inkscape"
 cask "prusaslicer"
 cask "openscad"
-cask "whisky"           # run Windows apps via Wine
 
 # --- Networking / Security ---
 cask "wireshark"
