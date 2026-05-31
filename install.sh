@@ -290,9 +290,7 @@ else
   info "Infinite Fusion save symlink already in place"
 fi
 
-# Start Syncthing as a background service
-brew services start syncthing
-info "Syncthing started — open http://localhost:8384 to finish setup"
+info "Syncthing installed — launch it from Applications to finish setup"
 warn "In the Syncthing UI: add your other device and share the '$SYNC_DIR' folder"
 warn "Make sure to set the folder path to $SYNC_DIR on both machines"
 

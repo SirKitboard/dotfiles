@@ -1,6 +1,6 @@
 tap "homebrew/bundle"
 brew "mas"                  # Mac App Store CLI
-brew "syncthing"            # P2P file sync (saves + secrets)
+cask "syncthing-app"        # P2P file sync (saves + secrets), menu bar app
 
 # --- Shell & Terminal ---
 brew "zsh-autosuggestions"
