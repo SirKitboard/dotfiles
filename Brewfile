@@ -39,8 +39,6 @@ brew "ghidra"           # reverse engineering
 # --- Network / Cloud ---
 brew "nmap"
 brew "wireshark"
-tap "cloudflare/cloudflare"
-brew "cloudflare/cloudflare/cf"   # Cloudflare CLI
 
 # --- Media / Utilities ---
 brew "ffmpeg"

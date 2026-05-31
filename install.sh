@@ -233,7 +233,7 @@ if command -v nvm &>/dev/null; then
   fi
   track "Node 24 set default" nvm alias default 24
 
-  for pkg in "@google/gemini-cli" "puppeteer-core"; do
+  for pkg in "@google/gemini-cli" "puppeteer-core" "cf"; do
     if npm list -g --depth=0 2>/dev/null | grep -q "${pkg##*/}"; then
       skip "npm: $pkg (already installed) — updating..."
       track "npm update: $pkg" npm install -g "$pkg"
