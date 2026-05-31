@@ -18,7 +18,9 @@ fail() { FAILURES+=("$1"); error "$1"; }
 # Runs a command, tracks pass/fail under a label.
 track() {
   local label="$1"; shift
-  if "$@" 2>&1; then
+  echo -e "${BLUE}  →${NC} $label..."
+  echo -e "    ${YELLOW}\$${NC} $*"
+  if "$@"; then
     info "$label"
   else
     fail "$label"
