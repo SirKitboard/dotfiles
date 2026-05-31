@@ -54,8 +54,17 @@ section "Personal Configuration"
 echo "  This info is written into your local config files only — not committed."
 echo ""
 
-prompt GIT_NAME  "Full name (for git commits)"
-prompt GIT_EMAIL "Email (for git commits)"
+EXISTING_GIT_NAME=$(git config --global user.name 2>/dev/null || true)
+EXISTING_GIT_EMAIL=$(git config --global user.email 2>/dev/null || true)
+
+if [[ -n "$EXISTING_GIT_NAME" && -n "$EXISTING_GIT_EMAIL" ]]; then
+  skip "Git identity already set ($EXISTING_GIT_NAME <$EXISTING_GIT_EMAIL>)"
+  GIT_NAME=""
+  GIT_EMAIL=""
+else
+  prompt GIT_NAME  "Full name (for git commits)"
+  prompt GIT_EMAIL "Email (for git commits)"
+fi
 
 echo ""
 echo "  SSH hosts (leave blank to skip):"
