@@ -34,6 +34,17 @@ Drop `.env` files into `~/Sync/secrets/`. Then symlink into projects:
 ln -sf ~/Sync/secrets/.env.myproject ~/Projects/myproject/.env
 ```
 
+## Ignoring files
+
+A `.stignore` file in `~/Sync/` tells Syncthing what to skip. It syncs to all
+devices automatically so you only configure it once:
+
+```
+.DS_Store
+```
+
+`install.sh` creates this automatically.
+
 ## File versioning
 
 Enable **Staggered versioning** on the `~/Sync` folder in the Syncthing UI:

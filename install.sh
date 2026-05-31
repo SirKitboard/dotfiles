@@ -258,6 +258,12 @@ fi
 # ── 12. Syncthing ────────────────────────────────────────────────────────────
 section "Syncthing"
 mkdir -p "$HOME/Sync/secrets"
+if ! grep -qx ".DS_Store" "$HOME/Sync/.stignore" 2>/dev/null; then
+  echo ".DS_Store" >> "$HOME/Sync/.stignore"
+  info "Syncthing: added .DS_Store to .stignore"
+else
+  skip "Syncthing: .stignore already configured"
+fi
 info "~/Sync structure ready"
 
 if [[ -f "$HOME/Sync/link-saves.sh" ]]; then
